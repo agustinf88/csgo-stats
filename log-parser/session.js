@@ -14,6 +14,7 @@ let matchData = null;
 let usersData = [];
 let bombPlanter = null;
 let bombDefuser = null;
+let isRoundFinished = true;
 
 const matchStart = (event) => {
   const map = event.data.map;
@@ -31,7 +32,13 @@ const matchStart = (event) => {
     damages: {},
   };
 
-  return rcon.runCommand("mp_forcecamera 1;");
+  if (map.substr(0, 2) === "ar") {
+    return rcon.runCommand("mp_forcecamera 1;bot_kick;mp_roundtime 10.00;mp_warmuptime 10;mp_autokick 0;");
+  } else {
+    return rcon.runCommand(
+      "mp_forcecamera 1;bot_kick;mp_maxrounds 21;mp_halftime 1;mp_roundtime 1.99;mp_freezetime 6;mp_warmuptime 10;mp_autokick 0;"
+    );
+  }
 };
 
 const enteredGame = (event) => {
@@ -198,13 +205,15 @@ const playerTriggered = (event, fromFile) => {
 
   if (event.data.action === "Got_The_Bomb") {
     //Start round
-    distributeBombs(fromFile);
+    if (isRoundFinished)
+      distributeBombs(fromFile);
   }
 
   const source = helpers.findPlayer(matchData, event.data.source);
   if (event.data.action === "Planted_The_Bomb") {
     bombPlanter = event.data.source;
     source.score += SCORE_BOMB_PLANTED;
+    isRoundFinished=true;
   } else if (event.data.action === "Defused_The_Bomb") {
     bombDefuser = event.data.source;
     source.score += SCORE_BOMB_DEFUSED;
@@ -216,12 +225,14 @@ const distributeBombs = (fromFile) => {
     return Promise.resolve();
   }
   usersData.forEach((user) => (user.alive = true));
+  
+  isRoundFinished=false;
 
   return firestore.getCurrentConfig().then((config) => {
     if (config === undefined) {
       return;
     }
-
+    
     const cts = usersData.filter((user) => user.team === "CT");
     const ts = usersData.filter((user) => user.team === "TERRORIST");
 
@@ -257,6 +268,8 @@ const applyRandomBomb = (bomb, team) => {
 };
 
 const roundEnd = (event) => {
+  isRoundFinished = true;
+  
   if (matchData === null) {
     return;
   }
